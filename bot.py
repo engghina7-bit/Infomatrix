@@ -9,6 +9,10 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMar
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import os
 from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
 # Telegram Bot Token (must be set in Koyeb environment variables)
 API_TOKEN = os.getenv("TELEGRAM_API_TOKEN")
 if not API_TOKEN:
@@ -45,16 +49,12 @@ DB_CONFIG = {
 }
 
 # Define FSM states
-
-
 class SearchStudent(StatesGroup):
     waiting_for_search_term = State()
-
 
 class SpecializationState(StatesGroup):
     waiting_for_name = State()
     waiting_for_edit_name = State()
-
 
 class SubjectState(StatesGroup):
     waiting_for_name = State()
@@ -62,14 +62,11 @@ class SubjectState(StatesGroup):
     waiting_for_edit_name = State()  # لتعديل المواد
 
 # Add to your states section
-
-
 class StudentRegistration(StatesGroup):
     waiting_for_contact = State()
     waiting_for_fullname = State()
     waiting_for_username = State()
     waiting_for_specialization = State()
-
 
 class JobRequestState(StatesGroup):
     choosing_subject = State()
@@ -77,16 +74,32 @@ class JobRequestState(StatesGroup):
     waiting_for_professor_name = State()
     waiting_for_details = State()
 
-
 class EditRequestState(StatesGroup):
     choosing_request = State()
     choosing_field = State()
     waiting_for_new_value = State()
 
-
 # Database connection pool
 db_pool = None
 
+##### أضف هذه الدالة لإنشاء connection pool #####
+async def create_db_pool():
+    """Create a database connection pool"""
+    global db_pool
+    try:
+        # إنشاء connection pool باستخدام asyncpg
+        db_pool = await asyncpg.create_pool(**DB_CONFIG)
+        print("✅ تم إنشاء connection pool لقاعدة البيانات بنجاح!")
+        
+        # (اختياري) test the connection
+        async with db_pool.acquire() as conn:
+            version = await conn.fetchval('SELECT version()')
+            print(f"📊 Connected to: {version}")
+            
+    except Exception as e:
+        print(f"❌ فشل في الاتصال بقاعدة البيانات: {e}")
+        # يمكنك إيقاف البوت هنا إذا فشل الاتصال
+        raise e
 
 # Admin keyboard layout
 admin_keyboard = ReplyKeyboardMarkup(
@@ -101,6 +114,7 @@ admin_keyboard = ReplyKeyboardMarkup(
     ],
     resize_keyboard=True
 )
+
 # Add this to your keyboards section
 student_keyboard = ReplyKeyboardMarkup(
     keyboard=[
@@ -111,9 +125,8 @@ student_keyboard = ReplyKeyboardMarkup(
     ],
     resize_keyboard=True
 )
+
 # ========== Helper Functions ==========
-
-
 async def is_admin(user_id: int) -> bool:
     """Check if user is admin"""
     try:
@@ -127,7 +140,6 @@ async def is_admin(user_id: int) -> bool:
     except Exception as e:
         logging.error(f"Error checking admin permissions: {e}")
         return False
-
 
 async def is_student_registered(user_id: int) -> bool:
     """Check if a user is registered as student"""
@@ -143,34 +155,21 @@ async def is_student_registered(user_id: int) -> bool:
         logging.error(f"Error checking student registration: {e}")
         return False
 
-
 async def specialization_exists(name):
     """Check if specialization exists"""
     async with db_pool.acquire() as conn:
         existing_id = await conn.fetchval("SELECT id FROM specializations WHERE name = $1", name)
         return existing_id is not None
 
-
 async def get_spec_name_by_id(spec_id):
     """Get specialization name by ID"""
     async with db_pool.acquire() as conn:
         return await conn.fetchval("SELECT name FROM specializations WHERE id = $1", spec_id)
 
-
-# async def subject_exists(name, spec_id):
-#     """Check if subject exists in specialization"""
-#     async with db_pool.acquire() as conn:
-#         return await conn.fetchval(
-#             "SELECT id FROM subjects WHERE name = $1 AND specialization_id = $2",
-#             name, spec_id
-#         )
-
-
 async def get_all_specializations():
     """Get all specializations"""
     async with db_pool.acquire() as conn:
         return await conn.fetch("SELECT id, name FROM specializations ORDER BY name")
-
 
 async def get_all_subjects_with_spec():
     """Get all subjects with specialization names"""
@@ -181,7 +180,6 @@ async def get_all_subjects_with_spec():
             JOIN specializations sp ON s.specialization_id = sp.id 
             ORDER BY sp.name, s.name
         """)
-
 
 async def log_operation(action, details):
     """Log operation to audit logs"""
@@ -194,7 +192,6 @@ async def log_operation(action, details):
     except Exception as e:
         logging.error(f"Error logging operation: {e}")
 
-
 async def subject_exists(subject_name: str, spec_id: int) -> bool:
     """Check if a subject already exists in a specialization"""
     async with db_pool.acquire() as conn:
@@ -203,7 +200,6 @@ async def subject_exists(subject_name: str, spec_id: int) -> bool:
             subject_name, spec_id
         )
         return exists
-
 
 async def save_student_contact(user_id: int, contact: str):
     """Save student contact information"""
@@ -214,7 +210,6 @@ async def save_student_contact(user_id: int, contact: str):
             user_id, contact
         )
 
-
 async def save_student_info(user_id: int, fullname: str, username: str, specialization_id: int):
     """Save student complete information"""
     async with db_pool.acquire() as conn:
@@ -223,7 +218,6 @@ async def save_student_info(user_id: int, fullname: str, username: str, speciali
             "WHERE user_id = $4::BIGINT",
             fullname, username, specialization_id, user_id
         )
-
 
 async def get_student_specialization(user_id: int) -> int:
     """Get student's specialization ID"""
@@ -234,7 +228,6 @@ async def get_student_specialization(user_id: int) -> int:
         )
         return spec_id
 
-
 async def get_subject_name_by_id(subject_id: int) -> str:
     """Get subject name by ID"""
     async with db_pool.acquire() as conn:
@@ -243,9 +236,8 @@ async def get_subject_name_by_id(subject_id: int) -> str:
             subject_id
         )
         return subject_name or "غير معروف"
+
 # ========== Command Handlers ==========
-
-
 @dp.message(Command(commands=["start"]))
 async def start_handler(message: types.Message, state: FSMContext):
     """Handle the /start command and display the appropriate dashboard"""
@@ -269,10 +261,7 @@ async def start_handler(message: types.Message, state: FSMContext):
             # الآن state معرفة
             await start_student_registration(message, state)
 
-
 # ========== Request Management Handlers ==========
-
-
 @dp.message(F.text == "📋 استعراض الطلبات")
 async def select_specialization(message: types.Message):
     """Display all specializations for request browsing"""
@@ -296,7 +285,6 @@ async def select_specialization(message: types.Message):
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
     await message.answer("اختر التخصص لتستعرض الطلبات الخاصة فيه 👇", reply_markup=keyboard)
-
 
 @dp.callback_query(lambda c: c.data.startswith("view_spec_"))
 async def select_subject(callback: types.CallbackQuery):
@@ -324,7 +312,6 @@ async def select_subject(callback: types.CallbackQuery):
     keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
     await callback.message.answer(f"اختر المادة في تخصص {spec_name} 👇", reply_markup=keyboard)
     await callback.answer()
-
 
 @dp.callback_query(lambda c: c.data.startswith("view_subj_"))
 async def view_requests_paginated(callback: types.CallbackQuery):
@@ -398,8 +385,6 @@ async def view_requests_paginated(callback: types.CallbackQuery):
     await callback.answer()
 
 # ========== Delete Requests Handlers ==========
-
-
 @dp.message(F.text == "❌ حذف الطلبات")
 async def delete_requests_menu(message: types.Message):
     """Display delete requests menu"""
@@ -417,7 +402,6 @@ async def delete_requests_menu(message: types.Message):
         resize_keyboard=True
     )
     await message.answer("اختر نوع الحذف الذي تريد تنفيذه:", reply_markup=keyboard)
-
 
 @dp.message(F.text == "🗑️ حذف طلب محدد")
 async def delete_specific_request(message: types.Message):
@@ -448,7 +432,6 @@ async def delete_specific_request(message: types.Message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
     await message.answer("اختر الطلب الذي تريد حذفه:", reply_markup=keyboard)
 
-
 @dp.callback_query(lambda c: c.data.startswith("delete_req_"))
 async def confirm_delete_request(callback: types.CallbackQuery):
     """Confirm request deletion"""
@@ -464,7 +447,6 @@ async def confirm_delete_request(callback: types.CallbackQuery):
     await callback.message.answer("⚠️ هل أنت متأكد من حذف هذا الطلب؟", reply_markup=keyboard)
     await callback.answer()
 
-
 @dp.callback_query(lambda c: c.data.startswith("confirm_del_req_"))
 async def execute_delete_request(callback: types.CallbackQuery):
     """Execute request deletion"""
@@ -475,7 +457,6 @@ async def execute_delete_request(callback: types.CallbackQuery):
 
     await callback.message.answer(f"✅ تم حذف الطلب رقم {req_id} بنجاح")
     await callback.answer()
-
 
 @dp.message(F.text == "🧹 حذف كل طلبات تخصص")
 async def delete_all_specialization_requests(message: types.Message):
@@ -497,7 +478,6 @@ async def delete_all_specialization_requests(message: types.Message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
     await message.answer("اختر التخصص لحذف جميع طلباته:", reply_markup=keyboard)
 
-
 @dp.callback_query(lambda c: c.data.startswith("del_all_spec_"))
 async def confirm_delete_all_specialization(callback: types.CallbackQuery):
     """Confirm bulk deletion of all requests in a specialization"""
@@ -516,7 +496,6 @@ async def confirm_delete_all_specialization(callback: types.CallbackQuery):
     await callback.message.answer(f"⚠️ هل أنت متأكد من حذف جميع طلبات تخصص {spec_name}؟", reply_markup=keyboard)
     await callback.answer()
 
-
 @dp.callback_query(lambda c: c.data.startswith("confirm_del_spec_"))
 async def execute_delete_all_specialization(callback: types.CallbackQuery):
     """Execute bulk deletion of all requests in a specialization"""
@@ -528,7 +507,6 @@ async def execute_delete_all_specialization(callback: types.CallbackQuery):
 
     await callback.message.answer(f"✅ تم حذف جميع طلبات تخصص {spec_name} بنجاح")
     await callback.answer()
-
 
 @dp.message(F.text == "📚 حذف كل طلبات مادة")
 async def delete_all_subject_requests(message: types.Message):
@@ -549,7 +527,6 @@ async def delete_all_subject_requests(message: types.Message):
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
     await message.answer("اختر التخصص أولاً:", reply_markup=keyboard)
-
 
 @dp.callback_query(lambda c: c.data.startswith("choose_subj_spec_"))
 async def choose_subject_for_deletion(callback: types.CallbackQuery):
@@ -578,7 +555,6 @@ async def choose_subject_for_deletion(callback: types.CallbackQuery):
     await callback.message.answer(f"اختر المادة في تخصص {spec_name}:", reply_markup=keyboard)
     await callback.answer()
 
-
 @dp.callback_query(lambda c: c.data.startswith("del_all_subj_"))
 async def confirm_delete_all_subject_requests(callback: types.CallbackQuery):
     """Confirm bulk deletion of all requests for a subject"""
@@ -599,7 +575,6 @@ async def confirm_delete_all_subject_requests(callback: types.CallbackQuery):
     await callback.message.answer(f"⚠️ هل أنت متأكد من حذف جميع طلبات مادة {subject_name}؟", reply_markup=keyboard)
     await callback.answer()
 
-
 @dp.callback_query(lambda c: c.data.startswith("confirm_del_subj_"))
 async def execute_delete_all_subject_requests(callback: types.CallbackQuery):
     """Execute bulk deletion of all requests for a subject"""
@@ -615,14 +590,11 @@ async def execute_delete_all_subject_requests(callback: types.CallbackQuery):
     await callback.answer()
 
 # ========== Cancel Handlers ==========
-
-
 @dp.callback_query(lambda c: c.data == "cancel_del_req")
 async def cancel_delete_req(callback: types.CallbackQuery):
     """Cancel request deletion"""
     await callback.message.answer("❌ تم إلغاء عملية حذف الطلب")
     await callback.answer()
-
 
 @dp.callback_query(lambda c: c.data == "cancel_del_spec")
 async def cancel_delete_spec(callback: types.CallbackQuery):
@@ -630,13 +602,11 @@ async def cancel_delete_spec(callback: types.CallbackQuery):
     await callback.message.answer("❌ تم إلغاء عملية حذف التخصص")
     await callback.answer()
 
-
 @dp.callback_query(lambda c: c.data == "cancel_del_subj")
 async def cancel_delete_subj(callback: types.CallbackQuery):
     """Cancel subject deletion"""
     await callback.message.answer("❌ تم إلغاء عملية حذف المادة")
     await callback.answer()
-
 
 @dp.callback_query(lambda c: c.data == "cancel_del")
 async def cancel_delete(callback: types.CallbackQuery):
@@ -645,8 +615,6 @@ async def cancel_delete(callback: types.CallbackQuery):
     await callback.answer()
 
 # ========== Student Management Handlers ==========
-
-
 @dp.message(F.text == "👥 إدارة الطلاب")
 async def manage_students_menu(message: types.Message):
     """Display student management menu"""
@@ -666,7 +634,6 @@ async def manage_students_menu(message: types.Message):
     )
     await message.answer("اختر عملية إدارة الطلاب:", reply_markup=keyboard)
 
-
 @dp.message(F.text == "🔍 بحث عن طالب")
 async def search_student_start(message: types.Message, state: FSMContext):
     """Initiate student search process"""
@@ -676,7 +643,6 @@ async def search_student_start(message: types.Message, state: FSMContext):
 
     await message.answer("أرسل رقم هاتف الطالب أو اسمه للبحث:")
     await state.set_state(SearchStudent.waiting_for_search_term)
-
 
 @dp.message(SearchStudent.waiting_for_search_term)
 async def process_search_term(message: types.Message, state: FSMContext):
@@ -707,7 +673,6 @@ async def process_search_term(message: types.Message, state: FSMContext):
     await message.answer(response)
     await state.clear()
 
-
 @dp.message(F.text == "🚫 تعطيل حساب طالب")
 async def deactivate_student(message: types.Message):
     """Display active students for deactivation"""
@@ -731,7 +696,6 @@ async def deactivate_student(message: types.Message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
     await message.answer("اختر الطالب لتعطيل حسابه:", reply_markup=keyboard)
 
-
 @dp.callback_query(lambda c: c.data.startswith("deactivate_"))
 async def confirm_deactivate_student(callback: types.CallbackQuery):
     """Confirm student deactivation"""
@@ -750,7 +714,6 @@ async def confirm_deactivate_student(callback: types.CallbackQuery):
     await callback.message.answer(f"⚠️ هل أنت متأكد من تعطيل حساب الطالب:\n{student['name']} - {student['phone']}؟", reply_markup=keyboard)
     await callback.answer()
 
-
 @dp.callback_query(lambda c: c.data.startswith("confirm_deact_"))
 async def execute_deactivate_student(callback: types.CallbackQuery):
     """Execute student deactivation"""
@@ -762,7 +725,6 @@ async def execute_deactivate_student(callback: types.CallbackQuery):
 
     await callback.message.answer(f"✅ تم تعطيل حساب الطالب {student_name} بنجاح")
     await callback.answer()
-
 
 @dp.message(F.text == "✅ تفعيل حساب طالب")
 async def activate_student(message: types.Message):
@@ -787,7 +749,6 @@ async def activate_student(message: types.Message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
     await message.answer("اختر الطالب لتفعيل حسابه:", reply_markup=keyboard)
 
-
 @dp.callback_query(lambda c: c.data.startswith("activate_"))
 async def confirm_activate_student(callback: types.CallbackQuery):
     """Confirm student activation"""
@@ -806,7 +767,6 @@ async def confirm_activate_student(callback: types.CallbackQuery):
     await callback.message.answer(f"⚠️ هل أنت متأكد من تفعيل حساب الطالب:\n{student['name']} - {student['phone']}؟", reply_markup=keyboard)
     await callback.answer()
 
-
 @dp.callback_query(lambda c: c.data.startswith("confirm_act_"))
 async def execute_activate_student(callback: types.CallbackQuery):
     """Execute student activation"""
@@ -819,13 +779,11 @@ async def execute_activate_student(callback: types.CallbackQuery):
     await callback.message.answer(f"✅ تم تفعيل حساب الطالب {student_name} بنجاح")
     await callback.answer()
 
-
 @dp.callback_query(lambda c: c.data == "cancel_action")
 async def cancel_action(callback: types.CallbackQuery):
     """Cancel student management action"""
     await callback.message.answer("❌ تم إلغاء العملية")
     await callback.answer()
-
 
 @dp.message(F.text == "👀 عرض جميع الطلاب")
 async def show_all_students_paginated(message: types.Message):
@@ -838,7 +796,6 @@ async def show_all_students_paginated(message: types.Message):
         return
 
     await show_students_page(message, 0)
-
 
 async def show_students_page(message: types.Message, page: int):
     """Display a page of students"""
@@ -878,7 +835,6 @@ async def show_students_page(message: types.Message, page: int):
 
     await message.answer(response, reply_markup=builder.as_markup())
 
-
 @dp.callback_query(lambda c: c.data.startswith("students_page_"))
 async def handle_students_page(callback: types.CallbackQuery):
     """Handle pagination for student list"""
@@ -887,8 +843,6 @@ async def handle_students_page(callback: types.CallbackQuery):
     await show_students_page(callback.message, page)
 
 # ========== Specialization Management Handlers ==========
-
-
 @dp.message(F.text == "🎓 إدارة التخصصات")
 async def manage_specializations(message: types.Message):
     """Manage specializations"""
@@ -920,14 +874,12 @@ async def manage_specializations(message: types.Message):
 
     await message.answer("🎓 إدارة التخصصات:", reply_markup=keyboard)
 
-
 @dp.callback_query(F.data == "add_spec")
 async def add_specialization(callback: types.CallbackQuery, state: FSMContext):
     """Add new specialization"""
     await callback.message.answer("📝 أرسل اسم التخصص الجديد:")
     await state.set_state(SpecializationState.waiting_for_name)
     await callback.answer()
-
 
 @dp.message(SpecializationState.waiting_for_name)
 async def process_spec_name(message: types.Message, state: FSMContext):
@@ -952,7 +904,6 @@ async def process_spec_name(message: types.Message, state: FSMContext):
 
     await state.clear()
 
-
 @dp.callback_query(F.data.startswith("delete_spec_"))
 async def delete_specialization(callback: types.CallbackQuery):
     """Delete specialization with confirmation"""
@@ -976,7 +927,6 @@ async def delete_specialization(callback: types.CallbackQuery):
 
     await callback.message.answer(warning_text, reply_markup=keyboard)
     await callback.answer()
-
 
 @dp.callback_query(F.data.startswith("confirm_delete_spec_"))
 async def confirm_delete_spec(callback: types.CallbackQuery):
@@ -1024,13 +974,11 @@ async def confirm_delete_spec(callback: types.CallbackQuery):
 
     await callback.answer()
 
-
 @dp.callback_query(F.data == "cancel_delete_spec")
 async def cancel_delete_spec(callback: types.CallbackQuery):
     """Cancel specialization deletion"""
     await callback.message.answer("❌ تم إلغاء عملية الحذف")
     await callback.answer()
-
 
 @dp.callback_query(F.data.startswith("edit_spec_"))
 async def edit_specialization(callback: types.CallbackQuery, state: FSMContext):
@@ -1044,7 +992,6 @@ async def edit_specialization(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.answer(f"📝 التخصص الحالي: {spec_name}\n\nأرسل الاسم الجديد للتخصص:")
     await state.set_state(SpecializationState.waiting_for_edit_name)
     await callback.answer()
-
 
 @dp.message(SpecializationState.waiting_for_edit_name)
 async def process_edit_spec_name(message: types.Message, state: FSMContext):
@@ -1079,8 +1026,6 @@ async def process_edit_spec_name(message: types.Message, state: FSMContext):
         await state.clear()
 
 # ========== Subject Management Handlers ==========
-
-
 @dp.message(F.text == "📚 إدارة المواد")
 async def manage_subjects(message: types.Message):
     """Display specializations to choose from for subject management"""
@@ -1111,7 +1056,6 @@ async def manage_subjects(message: types.Message):
     except Exception as e:
         logging.error(f"Error in manage_subjects: {e}")
         await message.answer("❌ حدث خطأ في عرض التخصصات. يرجى المحاولة لاحقاً.")
-
 
 @dp.callback_query(F.data.startswith("manage_subjects_spec_"))
 async def show_subjects_for_specialization(callback: types.CallbackQuery):
@@ -1169,7 +1113,6 @@ async def show_subjects_for_specialization(callback: types.CallbackQuery):
         logging.error(f"Error in show_subjects_for_specialization: {e}")
         await callback.message.answer("❌ حدث خطأ في عرض المواد. يرجى المحاولة لاحقاً.")
 
-
 @dp.callback_query(F.data.startswith("add_subject_to_"))
 async def add_subject_to_specialization(callback: types.CallbackQuery, state: FSMContext):
     """Start adding subject to specific specialization"""
@@ -1186,7 +1129,6 @@ async def add_subject_to_specialization(callback: types.CallbackQuery, state: FS
     except Exception as e:
         logging.error(f"Error in add_subject_to_specialization: {e}")
         await callback.message.answer("❌ حدث خطأ. يرجى المحاولة لاحقاً.")
-
 
 @dp.message(SubjectState.waiting_for_name)
 async def process_subject_name(message: types.Message, state: FSMContext):
@@ -1220,7 +1162,6 @@ async def process_subject_name(message: types.Message, state: FSMContext):
 
     finally:
         await state.clear()
-
 
 @dp.callback_query(F.data.startswith("edit_subject_spec_"))
 async def edit_subject_for_specialization(callback: types.CallbackQuery):
@@ -1257,7 +1198,6 @@ async def edit_subject_for_specialization(callback: types.CallbackQuery):
         logging.error(f"Error in edit_subject_for_specialization: {e}")
         await callback.message.answer("❌ حدث خطأ. يرجى المحاولة لاحقاً.")
 
-
 @dp.callback_query(F.data.startswith("delete_subject_spec_"))
 async def delete_subject_for_specialization(callback: types.CallbackQuery):
     """Display subjects for deletion in selected specialization"""
@@ -1293,7 +1233,6 @@ async def delete_subject_for_specialization(callback: types.CallbackQuery):
         logging.error(f"Error in delete_subject_for_specialization: {e}")
         await callback.message.answer("❌ حدث خطأ. يرجى المحاولة لاحقاً.")
 
-
 @dp.callback_query(F.data.startswith("delete_subject_"))
 async def confirm_delete_subject(callback: types.CallbackQuery):
     """Confirm subject deletion with details"""
@@ -1316,7 +1255,7 @@ async def confirm_delete_subject(callback: types.CallbackQuery):
         ])
 
         await callback.message.answer(
-            f"⚠️ هل أنت متأكد من حذف المادة '{subject['name']}' من تخصص '{subject['spec_name']}'؟",
+            f"⚠️ هل أنت متأكد من حذف المادة '{subject['name']}' من تخصص '{subject['spec_name']}'？",
             reply_markup=keyboard
         )
         await callback.answer()
@@ -1324,7 +1263,6 @@ async def confirm_delete_subject(callback: types.CallbackQuery):
     except Exception as e:
         logging.error(f"Error in confirm_delete_subject: {e}")
         await callback.message.answer("❌ حدث خطأ. يرجى المحاولة لاحقاً.")
-
 
 @dp.callback_query(F.data.startswith("confirm_del_subject_"))
 async def execute_delete_subject(callback: types.CallbackQuery):
@@ -1355,13 +1293,11 @@ async def execute_delete_subject(callback: types.CallbackQuery):
         logging.error(f"Error in execute_delete_subject: {e}")
         await callback.message.answer("❌ حدث خطأ أثناء حذف المادة!")
 
-
 @dp.callback_query(F.data == "cancel_delete_subject")
 async def cancel_delete_subject(callback: types.CallbackQuery):
     """Cancel subject deletion process"""
     await callback.message.answer("❌ تم إلغاء عملية الحذف")
     await callback.answer()
-
 
 @dp.callback_query(F.data.startswith("edit_subject_"))
 async def start_edit_subject(callback: types.CallbackQuery, state: FSMContext):
@@ -1395,7 +1331,6 @@ async def start_edit_subject(callback: types.CallbackQuery, state: FSMContext):
     except Exception as e:
         logging.error(f"Error in start_edit_subject: {e}")
         await callback.message.answer("❌ حدث خطأ. يرجى المحاولة لاحقاً.")
-
 
 @dp.message(SubjectState.waiting_for_edit_name)
 async def process_edit_subject_name(message: types.Message, state: FSMContext):
@@ -1442,7 +1377,6 @@ async def process_edit_subject_name(message: types.Message, state: FSMContext):
     finally:
         await state.clear()
 
-
 @dp.callback_query(F.data == "back_to_specs")
 async def back_to_specializations(callback: types.CallbackQuery):
     """Return to specialization selection"""
@@ -1450,8 +1384,6 @@ async def back_to_specializations(callback: types.CallbackQuery):
     # You can call manage_subjects function here or use appropriate navigation
 
 # ========== Audit Log Handlers ==========
-
-
 @dp.message(F.text == "📝 سجل العمليات")
 async def show_operations_log(message: types.Message):
     """Show operations log"""
@@ -1490,10 +1422,7 @@ async def show_operations_log(message: types.Message):
         logging.error(f"Error showing operations log: {e}")
         await message.answer("❌ حدث خطأ في عرض سجل العمليات")
 
-
 # ========== Student Section ==========
-
-
 async def start_student_registration(message: types.Message, state: FSMContext):
     """Start student registration process"""
     keyboard = ReplyKeyboardMarkup(
@@ -1511,7 +1440,6 @@ async def start_student_registration(message: types.Message, state: FSMContext):
     )
     await state.set_state(StudentRegistration.waiting_for_contact)
 
-
 @dp.message(StudentRegistration.waiting_for_contact, F.contact)
 async def process_contact(message: types.Message, state: FSMContext):
     """Process student contact sharing"""
@@ -1528,7 +1456,6 @@ async def process_contact(message: types.Message, state: FSMContext):
     )
     await state.set_state(StudentRegistration.waiting_for_fullname)
 
-
 @dp.message(StudentRegistration.waiting_for_fullname)
 async def process_fullname(message: types.Message, state: FSMContext):
     """Process student fullname"""
@@ -1542,7 +1469,6 @@ async def process_fullname(message: types.Message, state: FSMContext):
         reply_markup=ReplyKeyboardRemove()
     )
     await state.set_state(StudentRegistration.waiting_for_username)
-
 
 @dp.message(StudentRegistration.waiting_for_username)
 async def process_username(message: types.Message, state: FSMContext):
@@ -1594,7 +1520,6 @@ async def process_username(message: types.Message, state: FSMContext):
     )
     await state.set_state(StudentRegistration.waiting_for_specialization)
 
-
 async def validate_university_username(username: str) -> bool:
     """Validate university username format: text_text_numbers"""
     import re
@@ -1602,7 +1527,6 @@ async def validate_university_username(username: str) -> bool:
     # الأمثلة المقبولة: adel_123456, moohamed_adel_sari_121312, mohamed_adel_123456
     pattern = r'^[a-zA-Z]+(?:_[a-zA-Z]+)*_[0-9]+$'
     return bool(re.match(pattern, username))
-
 
 async def is_username_taken(username: str) -> bool:
     """Check if username is already taken in the system"""
@@ -1616,7 +1540,6 @@ async def is_username_taken(username: str) -> bool:
     except Exception as e:
         logging.error(f"Error checking username availability: {e}")
         return False
-
 
 @dp.callback_query(F.data.startswith("stu_spec_"))
 async def process_specialization(callback: types.CallbackQuery, state: FSMContext):
@@ -1651,7 +1574,6 @@ async def process_specialization(callback: types.CallbackQuery, state: FSMContex
     await state.clear()
     await callback.answer()
 
-
 async def show_student_dashboard(message: types.Message):
     """Show student dashboard with available options"""
     await message.answer(
@@ -1660,7 +1582,6 @@ async def show_student_dashboard(message: types.Message):
         "اختر ما تريد القيام به من الخيارات التالية:",
         reply_markup=student_keyboard
     )
-
 
 @dp.message(F.text == "👥 استعراض الشركاء المتاحين")
 async def show_available_partners(message: types.Message):
@@ -1699,7 +1620,6 @@ async def show_available_partners(message: types.Message):
         "اختر المادة لرؤية الشركاء المتاحين:",
         reply_markup=keyboard
     )
-
 
 @dp.callback_query(F.data.startswith("view_partners_"))
 async def show_partners_for_subject(callback: types.CallbackQuery):
@@ -1757,7 +1677,6 @@ async def show_partners_for_subject(callback: types.CallbackQuery):
     await callback.message.answer(response, reply_markup=keyboard)
     await callback.answer()
 
-
 @dp.callback_query(F.data.startswith("contact_"))
 async def contact_partner(callback: types.CallbackQuery):
     """Handle contact request with partner"""
@@ -1796,14 +1715,12 @@ async def contact_partner(callback: types.CallbackQuery):
         await callback.message.answer("❌ لم يتم العثور على معلومات الشريك")
 
     await callback.answer()
+
 # ========== Back Button Handler ==========
-
-
 @dp.message(F.text == "↩️ رجوع")
 async def back_to_main_menu(message: types.Message):
     """Handle back button to return to main menu"""
     await message.answer("العودة إلى القائمة الرئيسية", reply_markup=admin_keyboard)
-
 
 @dp.message(F.text == "➕ إضافة طلب وظيفة")
 async def add_job_request(message: types.Message, state: FSMContext):
@@ -1840,7 +1757,6 @@ async def add_job_request(message: types.Message, state: FSMContext):
     await state.set_state(JobRequestState.choosing_subject)
     await state.update_data(specialization_id=spec_id)
 
-
 @dp.callback_query(F.data.startswith("add_job_"))
 async def process_job_subject(callback: types.CallbackQuery, state: FSMContext):
     """Process subject selection for job request"""
@@ -1854,7 +1770,6 @@ async def process_job_subject(callback: types.CallbackQuery, state: FSMContext):
     await state.set_state(JobRequestState.waiting_for_class_number)
     await callback.answer()
 
-
 @dp.message(JobRequestState.waiting_for_class_number)
 async def process_class_number(message: types.Message, state: FSMContext):
     """Process class number input"""
@@ -1866,7 +1781,6 @@ async def process_class_number(message: types.Message, state: FSMContext):
         "مثال: د. أحمد محمد أو أ. علي حسن"
     )
     await state.set_state(JobRequestState.waiting_for_professor_name)
-
 
 @dp.message(JobRequestState.waiting_for_professor_name)
 async def process_professor_name(message: types.Message, state: FSMContext):
@@ -1882,7 +1796,6 @@ async def process_professor_name(message: types.Message, state: FSMContext):
         "إذا لا توجد ملاحظات، أرسل \"لا يوجد\""
     )
     await state.set_state(JobRequestState.waiting_for_details)
-
 
 @dp.message(JobRequestState.waiting_for_details)
 async def process_job_details(message: types.Message, state: FSMContext):
@@ -1923,9 +1836,8 @@ async def process_job_details(message: types.Message, state: FSMContext):
 
     await message.answer(response, reply_markup=student_keyboard)
     await state.clear()
+
 # إضافة حالة للطلبات
-
-
 @dp.message(F.text == "✏️ تعديل طلب سابق")
 async def edit_job_request(message: types.Message, state: FSMContext):
     """Edit existing job request"""
@@ -1962,7 +1874,6 @@ async def edit_job_request(message: types.Message, state: FSMContext):
 
     await message.answer("اختر الطلب الذي تريد تعديله:", reply_markup=keyboard)
     await state.set_state(EditRequestState.choosing_request)
-
 
 @dp.callback_query(F.data.startswith("edit_job_"))
 async def choose_field_to_edit(callback: types.CallbackQuery, state: FSMContext):
@@ -2008,7 +1919,6 @@ async def choose_field_to_edit(callback: types.CallbackQuery, state: FSMContext)
     await state.set_state(EditRequestState.choosing_field)
     await callback.answer()
 
-
 @dp.callback_query(EditRequestState.choosing_field, F.data.startswith("edit_field_"))
 async def process_field_selection(callback: types.CallbackQuery, state: FSMContext):
     """Process which field user wants to edit"""
@@ -2036,7 +1946,6 @@ async def process_field_selection(callback: types.CallbackQuery, state: FSMConte
     await callback.message.answer(field_prompts[field_name])
     await state.set_state(EditRequestState.waiting_for_new_value)
     await callback.answer()
-
 
 @dp.message(EditRequestState.waiting_for_new_value)
 async def process_new_value(message: types.Message, state: FSMContext):
@@ -2077,14 +1986,12 @@ async def process_new_value(message: types.Message, state: FSMContext):
     )
     await state.clear()
 
-
 @dp.callback_query(F.data == "cancel_edit")
 async def cancel_edit(callback: types.CallbackQuery, state: FSMContext):
     """Cancel the edit process"""
     await callback.message.answer("❌ تم إلغاء عملية التعديل", reply_markup=student_keyboard)
     await state.clear()
     await callback.answer()
-
 
 @dp.message(F.text == "🗑️ حذف طلب")
 async def delete_job_request(message: types.Message):
@@ -2126,7 +2033,6 @@ async def delete_job_request(message: types.Message):
 
     await message.answer("اختر الطلب الذي تريد حذفه:", reply_markup=keyboard)
 
-
 @dp.callback_query(F.data.startswith("delete_job_"))
 async def confirm_delete_request(callback: types.CallbackQuery):
     """Confirm deletion of job request"""
@@ -2165,7 +2071,6 @@ async def confirm_delete_request(callback: types.CallbackQuery):
     await callback.message.answer(response, reply_markup=keyboard)
     await callback.answer()
 
-
 @dp.callback_query(F.data.startswith("confirm_delete_"))
 async def execute_delete_request(callback: types.CallbackQuery):
     """Execute the deletion of job request"""
@@ -2201,23 +2106,18 @@ async def execute_delete_request(callback: types.CallbackQuery):
     await callback.message.answer(response, reply_markup=student_keyboard)
     await callback.answer()
 
-
 @dp.callback_query(F.data == "cancel_delete")
 async def cancel_delete(callback: types.CallbackQuery):
     """Cancel the deletion process"""
     await callback.message.answer("❌ تم إلغاء عملية الحذف", reply_markup=student_keyboard)
     await callback.answer()
+
 # ========== Bot Startup and Shutdown ==========
-
-
-async def main():
-    """Main function to start the bot"""
-    try:
-        # تشغيل البوت وربط on_shutdown لإغلاق قاعدة البيانات بشكل صحيح
-        await dp.start_polling(bot, on_shutdown=on_shutdown)
-    finally:
-        print("👋 تم إنهاء البوت")
-
+##### أضف دالة on_startup #####
+async def on_startup(dispatcher: Dispatcher):
+    """Operations to run on bot startup"""
+    print("✅ البوت يعمل الآن!")
+    # يمكنك وضع أي كود تريد تنفيذه عند بدء التشغيل هنا
 
 async def on_shutdown(dispatcher: Dispatcher):
     """Cleanup on bot shutdown"""
@@ -2225,6 +2125,20 @@ async def on_shutdown(dispatcher: Dispatcher):
         await db_pool.close()
         print("🔌 تم إغلاق الاتصال بقاعدة البيانات")
 
+async def main():
+    """Main function to start the bot"""
+    try:
+        ##### 1. إنشاء connection pool أولاً #####
+        await create_db_pool()
+        
+        ##### 2. ثم بدء استقبال التحديثات #####
+        print("🤖 بدء تشغيل البوت...")
+        await dp.start_polling(bot, on_startup=on_startup, on_shutdown=on_shutdown)
+        
+    except Exception as e:
+        print(f"❌ فشل في تشغيل البوت: {e}")
+    finally:
+        await on_shutdown(dp)  # تأكد من الإغلاق بشكل صحيح حتى في حالة الخطأ
 
 if __name__ == "__main__":
     asyncio.run(main())
