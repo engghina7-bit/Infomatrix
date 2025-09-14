@@ -42,6 +42,7 @@ DB_CONFIG = {
     "user": DB_USER,
     "password": DB_PASSWORD,
     "statement_cache_size": 0
+    "ssl": "require"  
 }
 async def create_db_pool():
     global db_pool
@@ -2281,5 +2282,6 @@ print(f"🔗 Bound to port: {port}")
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
