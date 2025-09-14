@@ -43,6 +43,21 @@ DB_CONFIG = {
     "password": DB_PASSWORD,
     "statement_cache_size": 0
 }
+async def create_db_pool():
+    global db_pool
+    try:
+        print("🔄 جاري محاولة الاتصال بقاعدة البيانات...")
+        print(f"📋 Host: {DB_CONFIG['host']}")
+        print(f"📋 Port: {DB_CONFIG['port']}")
+        print(f"📋 User: {DB_CONFIG['user']}")
+        print(f"📋 Database: {DB_CONFIG['database']}")
+        
+        db_pool = await asyncpg.create_pool(**DB_CONFIG)
+        print("✅ تم إنشاء connection pool لقاعدة البيانات بنجاح!")
+        
+    except Exception as e:
+        print(f"❌ فشل في الاتصال بقاعدة البيانات: {e}")
+        raise e
 
 # Define FSM states
 
@@ -207,6 +222,11 @@ async def subject_exists(subject_name: str, spec_id: int) -> bool:
 
 async def save_student_contact(user_id: int, contact: str):
     """Save student contact information"""
+    # تحقق من أن db_pool متصل
+    if db_pool is None:
+        print("❌ Database not connected!")
+        return
+    
     async with db_pool.acquire() as conn:
         await conn.execute(
             "INSERT INTO students (user_id, contact) VALUES ($1::BIGINT, $2) "
@@ -2261,4 +2281,5 @@ print(f"🔗 Bound to port: {port}")
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
