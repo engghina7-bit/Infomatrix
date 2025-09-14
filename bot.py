@@ -2224,7 +2224,41 @@ async def on_shutdown(dispatcher: Dispatcher):
     if db_pool:
         await db_pool.close()
         print("🔌 تم إغلاق الاتصال بقاعدة البيانات")
+# ... (كل الكود السابق) ...
+
+# ========== Bot Startup and Shutdown ==========
+async def main():
+    """Main function to start the bot"""
+    try:
+        # 1. إنشاء connection pool أولاً
+        await create_db_pool()
+        
+        # 2. ثم بدء استقبال التحديثات
+        print("🤖 بدء تشغيل البوت...")
+        await dp.start_polling(bot, on_startup=on_startup, on_shutdown=on_shutdown)
+        
+    except Exception as e:
+        print(f"❌ فشل في تشغيل البوت: {e}")
+    finally:
+        await on_shutdown(dp)
+
+# إضافة لربط port للتجنب خطأ Render
+import socket
+from contextlib import closing
+
+def find_free_port():
+    """Find a free port to bind to"""
+    with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
+        s.bind(('', 0))
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        return s.getsockname()[1]
+
+# إربط على port عشوائي
+port = find_free_port()
+print(f"🔗 Bound to port: {port}")
+
 
 
 if __name__ == "__main__":
     asyncio.run(main())
+
