@@ -15,7 +15,6 @@ from aiogram.types import (
     ReplyKeyboardRemove
 )
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-
 # -------------------------------
 # 1. Configuration & Setup
 # -------------------------------
