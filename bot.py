@@ -1,3 +1,23 @@
+Skip to content
+engghina7-bit
+Infomatrix
+Repository navigation
+Code
+Issues
+Pull requests
+Actions
+Projects
+Wiki
+Security and quality
+Insights
+Settings
+Infomatrix
+/bot.py/
+Deleting Infomatrix/bot.py. Commit changes to save.
+3448
+bot.py
+Original file line number	Diff line number	Diff line change
+@@ -1,3448 +0,0 @@
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 import logging
@@ -2302,7 +2322,7 @@ async def on_startup():
     global db_pool
     db_pool = await asyncpg.create_pool(**DB_CONFIG)
     logging.info("✅ Database pool initialized")
-    
+
     await init_db_tables()
 
     # حذف أي ويب هوك قديم يسبب تعارض Conflict Error
@@ -2314,7 +2334,7 @@ async def on_startup():
         # ربط الويب هوك بالمسار الصحيح لـ FastAPI
         clean_url = WEBHOOK_URL.rstrip('/')
         full_webhook_url = f"{clean_url}/webhook/{API_TOKEN}"
-        
+
         await bot.set_webhook(full_webhook_url)
         logging.info(f"✅ Webhook set successfully to: {full_webhook_url}")
     else:
@@ -2485,7 +2505,7 @@ async def process_broadcast(message: types.Message, state: FSMContext):
         return await message.answer("تم إلغاء إرسال الإعلان 🚫", reply_markup=admin_keyboard)
 
     await message.answer("⏳ جاري إرسال الإعلان للطلاب في الخلفية... يمكنك الاستمرار في استخدام البوت ولن يتم تكرار الإعلان.")
-    
+
     admin_chat_id = message.chat.id
     msg_id = message.message_id
     await state.clear()
@@ -2501,7 +2521,7 @@ async def process_broadcast(message: types.Message, state: FSMContext):
                     success_count += 1
                     await asyncio.sleep(0.05) 
                 except Exception: continue 
-                    
+
             await bot.send_message(admin_chat_id, f"✅ انتهت عملية الإذاعة!\nتم إرسال الإعلان بنجاح إلى {success_count} طالب.", reply_markup=admin_keyboard)
             await log_operation("إرسال إعلان", f"تم إرسال إعلان لـ {success_count} طالب.")
         except Exception as e:
@@ -2589,7 +2609,7 @@ async def handle_ad_request_submission(callback: types.CallbackQuery):
         InlineKeyboardButton(text="✅ موافقة", callback_data=f"approve_ad_{req_id}_{user_id}"),
         InlineKeyboardButton(text="❌ رفض", callback_data=f"reject_ad_{req_id}_{user_id}")
     ]])
-    
+
     async with db_pool.acquire() as conn:
         admins = await conn.fetch("SELECT user_id FROM admins")
     for admin in admins:
@@ -2648,7 +2668,7 @@ async def view_requests_paginated(callback: types.CallbackQuery):
     data_parts = callback.data.split("_")
     spec_id, subject_id, page = int(data_parts[2]), int(data_parts[3]), int(data_parts[4])
     limit = 5; offset = page * limit
-    
+
     async with db_pool.acquire() as conn:
         requests = await conn.fetch("""
             SELECT r.id, u.fullname as name, u.contact as phone, sb.name as subject_name, 
@@ -2921,7 +2941,7 @@ async def show_students_page(message: types.Message, page: int):
     builder = InlineKeyboardBuilder()
     if page > 0: builder.add(InlineKeyboardButton(text="⬅️ السابق", callback_data=f"students_page_{page-1}"))
     if (page + 1) * limit < total_count: builder.add(InlineKeyboardButton(text="التالي ➡️", callback_data=f"students_page_{page+1}"))
-    
+
     markup = builder.as_markup() if builder.as_markup().inline_keyboard else None
     await message.answer(response, reply_markup=markup)
 
@@ -2972,7 +2992,7 @@ async def delete_specialization(callback: types.CallbackQuery):
     async with db_pool.acquire() as conn:
         spec_name = await conn.fetchval("SELECT name FROM specializations WHERE id = $1", spec_id)
         subjects_count = await conn.fetchval("SELECT COUNT(*) FROM subjects WHERE specialization_id = $1", spec_id)
-    
+
     warning_text = f"⚠️ تحذير! التخصص '{spec_name}' يحتوي على {subjects_count} مادة. سيتم حذف جميع المواد المرتبطة به أيضاً!" if subjects_count > 0 else f"⚠️ هل أنت متأكد من حذف التخصص '{spec_name}'؟"
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✅ نعم، احذف مع المواد", callback_data=f"confirm_delete_spec_{spec_id}")],
@@ -3033,7 +3053,7 @@ async def show_subjects_for_specialization(callback: types.CallbackQuery):
     spec_name = await get_spec_name_by_id(spec_id)
     async with db_pool.acquire() as conn:
         subjects = await conn.fetch("SELECT id, name FROM subjects WHERE specialization_id = $1 ORDER BY name", spec_id)
-    
+
     text = f"📚 مواد تخصص '{spec_name}':\n\n"
     if not subjects: text = f"📭 لا توجد مواد في تخصص '{spec_name}'."
     else:
@@ -3179,13 +3199,13 @@ async def process_username(message: types.Message, state: FSMContext):
     async with db_pool.acquire() as conn:
         if await conn.fetchval("SELECT EXISTS(SELECT 1 FROM students WHERE username = $1)", username):
             return await message.answer("❌ مسجل مسبقاً!")
-    
+
     await state.update_data(username=username)
     specs = await get_all_specializations()
     if not specs:
         await state.clear()
         return await message.answer("❌ لا توجد تخصصات متاحة.")
-    
+
     keyboard = InlineKeyboardMarkup(inline_keyboard=[])
     for spec in specs: keyboard.inline_keyboard.append([InlineKeyboardButton(text=spec['name'], callback_data=f"stu_spec_{spec['id']}")])
     await message.answer("أخيراً، اختر تخصصك:", reply_markup=keyboard)
@@ -3212,11 +3232,11 @@ async def add_job_request(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     spec_id = await get_student_specialization(user_id)
     if not spec_id: return await message.answer("❌ لم تكمل تسجيلك. أرسل /start")
-    
+
     async with db_pool.acquire() as conn:
         subjects = await conn.fetch("SELECT id, name FROM subjects WHERE specialization_id = $1 ORDER BY id", spec_id)
     if not subjects: return await message.answer("❌ لا توجد مواد.")
-    
+
     await state.update_data(subjects=subjects, page=0, specialization_id=spec_id)
     await show_subject_page(message, state, page=0)
 
@@ -3225,15 +3245,15 @@ async def show_subject_page(message, state, page: int):
     subjects = data['subjects']
     PAGE_SIZE = 5
     start, end = page * PAGE_SIZE, (page * PAGE_SIZE) + PAGE_SIZE
-    
+
     keyboard = InlineKeyboardMarkup(inline_keyboard=[])
     for s in subjects[start:end]: keyboard.inline_keyboard.append([InlineKeyboardButton(text=s['name'], callback_data=f"add_job_{s['id']}")])
-    
+
     nav_buttons = []
     if page > 0: nav_buttons.append(InlineKeyboardButton(text="⬅️ السابق", callback_data=f"job_subjects_page_{page-1}"))
     if end < len(subjects): nav_buttons.append(InlineKeyboardButton(text="التالي ➡️", callback_data=f"job_subjects_page_{page+1}"))
     if nav_buttons: keyboard.inline_keyboard.append(nav_buttons)
-    
+
     await message.answer("📚 اختر المادة التي تريد إضافة طلب لها:", reply_markup=keyboard)
 
 @dp.callback_query(F.data.startswith("job_subjects_page_"))
@@ -3322,7 +3342,7 @@ async def show_partners_page(message, state: FSMContext, page: int):
     subject_name = await get_subject_name_by_id(data['subject_id'])
     start, end = page * 5, (page * 5) + 5
     res = f"👥 الشركاء لمادة {subject_name} (صفحة {page+1}):\n\n"
-    
+
     keyboard = InlineKeyboardMarkup(inline_keyboard=[])
     for i, p in enumerate(partners[start:end], start + 1):
         res += f"{i}. {p['fullname']}\n📧 {p['username']}@svuonline.org\n📞 {p['contact']}\n🏫 {p['class_number']} - 👨‍🏫 {p['professor_name']}\n💡 {p['details']}\n\n"
@@ -3332,7 +3352,7 @@ async def show_partners_page(message, state: FSMContext, page: int):
     if page > 0: nav_buttons.append(InlineKeyboardButton(text="⬅️ السابق", callback_data=f"partners_page_{page-1}"))
     if end < len(partners): nav_buttons.append(InlineKeyboardButton(text="التالي ➡️", callback_data=f"partners_page_{page+1}"))
     if nav_buttons: keyboard.inline_keyboard.append(nav_buttons)
-    
+
     try: await message.edit_text(res, reply_markup=keyboard)
     except: await message.answer(res, reply_markup=keyboard)
 
@@ -3421,8 +3441,7 @@ async def confirm_delete_job_request(callback: types.CallbackQuery):
     req_id = int(callback.data.split("_")[2])
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✅ نعم، احذف", callback_data=f"confirm_del_job_{req_id}")],
-        [InlineKeyboardButton(text="❌ إلغاء", callback_data="cancel_del")]
-    ])
+        [InlineKeyboardButton(text="❌ إلغاء", callback_data="cancel_del")]])
     await callback.message.answer("⚠️ هل أنت متأكد من حذف الطلب؟", reply_markup=keyboard)
     await callback.answer()
 
